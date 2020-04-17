@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="ru" xmlns:v-bind="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="UTF-8">
+    <title>ЛР 3</title>
+    <style>
+        #page{
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translateX(-50%) translateY(-50%);
+            max-width: 260px;
+        }
+    </style>
+
+    <script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/vue-resource@1.5.1"></script>
+</head>
+<body>
+<div id="page">
+    <div v-if="mode === 'game'" id="game">
+        <p style="color: darkred">{{error}}</p>
+        <input type="number" title="угол в радианах" v-model="angle" :disabled="disabledBtn">
+        <button :disabled="disabledBtn" @click="step">Сделать ход</button>
+        <div>
+            <div v-for="item in state.playersInfo">
+                {{item}}
+            </div>
+            <p style="color: darkgreen">{{state.winner}}</p>
+        </div>
+    </div>
+
+    <div v-if="mode === 'start'" id="start">
+        <p style="color: darkred">{{error}}</p>
+        <button @click="connect">Подключиться к игре</button>
+    </div>
+
+</div>
+
+<script type="text/javascript">
+
+    var vue = new Vue({
+        el: "#page",
+        data:{
+            mode: "start",
+            error : "",
+            winner : "",
+            token : "",
+            state: {},
+            angle: "",
+            disabledBtn: true
+        },
+
+        methods:{
+            connect: function () {
+                if (sessionStorage.getItem("token")) {
+                    vue.mode = "game";
+                    var token = sessionStorage.getItem("token");
+                    this.$http.get('validateToken', {params: {token: token}})
+                        .then(function (resp) {
+                                data = resp.body;
+                                if (data.status === "ok") {
+                                    this.error = "";
+                                    console.log(data.body);
+                                    if (data.body) {
+                                        this.mode = "game";
+                                        this.token = token;
+                                        this.canGo();
+                                        return;
+                                    }
+                                    this.getToken();
+                                }else{
+                                    this.updateError(data.body);
+                                }
+                            },
+                            function (error) {
+                                this.error = error.message;
+                            }
+                        );
+                }else {
+                    this.getToken();
+                }
+
+
+
+            },
+            getToken: function(){
+                this.$http.get('connect')
+                    .then(function (resp) {
+                            data = resp.body;
+                            if (data.status === "ok") {
+                                this.error = "";
+                                this.mode = "game";
+                                this.token = data.body.token;
+                                sessionStorage.setItem("token", this.token);
+                                this.canGo();
+                            }else{
+                                this.updateError(data.body);
+                            }
+                        },
+                        function (error) {
+                            this.error = error.message;
+                        }
+                    );
+            },
+            step: function () {
+                this.$http.get('go', {params: {token: this.token, angle: this.angle}})
+                    .then(function (resp) {
+                            data = resp.body;
+                            if (data.status === "ok") {
+                                this.error = "";
+                                this.mode = "game";
+                                console.log(data.body);
+                                this.state = data.body;
+                            }else{
+                                this.updateError(data.body);
+                            }
+                        },
+                        function (error) {
+                            this.error = error.message;
+                        }
+                    );
+            },
+            canGo: function () {
+                this.$http.get('canGo', {params: {token: this.token}})
+                    .then(function (resp) {
+                            data = resp.body;
+                            if (data.status === "ok") {
+                                this.error = "";
+                                this.mode = "game";
+                                console.log(data.body);
+                                this.disabledBtn = !data.body;
+                                this.getState();
+                            }else{
+                                this.updateError(data.body);
+                                setTimeout(this.getState, 2500);
+                            }
+                        },
+                        function (error) {
+                            this.error = error.message;
+                        }
+                    );
+            },
+            getState: function () {
+                this.$http.get('getState', {params: {token: this.token}})
+                    .then(function (resp) {
+                            data = resp.body;
+                            if (data.status === "ok") {
+                                this.error = "";
+                                console.log(data.body);
+                                this.state = data.body;
+                            } else {
+                                this.updateError(data.body);
+                            }
+                            setTimeout(this.canGo, 1000)
+                        },
+                        function (error) {
+                            this.error = error.message;
+                        }
+                    );
+            },
+            updateError: function (error) {
+                if (this.disabledBtn === false){
+                    this.disabledBtn = true;
+                }
+                if (error !== this.error) {
+                    this.error = error;
+                }
+            }
+    }
+    });
+</script>
+</body>
+</html>
